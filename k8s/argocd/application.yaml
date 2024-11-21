@@ -3,12 +3,15 @@ kind: Application
 metadata:
   name: devops-app
   namespace: argocd
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-succeeded: "slack:devops-alerts"
+    notifications.argoproj.io/subscribe.on-sync-failed: "slack:devops-alerts"
 spec:
-  project: default
+  project: devops-project
   source:
     repoURL: https://github.com/YOUR_USERNAME/DevOps.git  # Please replace with your actual repository URL
     targetRevision: HEAD
-    path: k8s/overlays/dev  # Assuming you want to deploy the dev overlay
+    path: k8s/base
   destination:
     server: https://kubernetes.default.svc
     namespace: devops
@@ -18,3 +21,14 @@ spec:
       selfHeal: true
     syncOptions:
     - CreateNamespace=true
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  health:
+    healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: hello-world
+      namespace: devops

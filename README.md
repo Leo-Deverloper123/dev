@@ -1,241 +1,157 @@
-# Cloud Native Application with AKS, Istio, and ArgoCD
+# DevOps Project with AKS, ArgoCD, and Istio
 
-This repository contains a complete cloud-native application setup demonstrating modern DevOps practices including Infrastructure as Code, CI/CD, GitOps, and service mesh implementation.
+This project demonstrates a complete DevOps pipeline using Azure Kubernetes Service (AKS), ArgoCD, and Istio service mesh.
 
-## Components
+## Project Structure
 
-1. **Go Application**
-   - Simple HTTP server responding with "Hello, World!"
-   - Containerized using Docker
-   - Located in `main.go` and `Dockerfile`
-
-2. **Infrastructure (Terraform)**
-   - AKS cluster provisioning
-   - Azure Container Registry (ACR) setup
-   - Located in `terraform/` directory
-
-3. **Kubernetes Manifests**
-   - Base configurations in `k8s/base/`
-   - Environment-specific overlays in `k8s/overlays/`
-   - Kustomize for environment management
-
-4. **Service Mesh (Istio)**
-   - Gateway and VirtualService configurations
-   - Canary deployment setup
-   - Located in `istio/` directory
-
-5. **CI/CD Pipeline**
-   - GitHub Actions workflow for CI
-   - ArgoCD for GitOps-based deployments
-   - Located in `.github/workflows/`
+```
+DevOps/
+├── .github/workflows/    # CI Pipeline
+├── terraform/           # Infrastructure as Code
+├── k8s/                # Kubernetes Manifests
+│   ├── base/           # Base Configurations
+│   ├── environments/   # Environment-specific Configs
+│   └── argocd/        # ArgoCD Configurations
+├── istio/              # Istio Configurations
+└── src/               # Application Source Code
+```
 
 ## Prerequisites
 
-- Azure subscription
+- Azure Subscription
 - Azure CLI
 - Terraform
 - kubectl
-- Helm
+- ArgoCD CLI
+- Go 1.21+
 - Docker
 
-## Setup Instructions
+## Infrastructure Setup
 
-1. **Infrastructure Setup**
-   ```bash
-   cd terraform
-   terraform init
-   terraform apply
-   ```
+1. **Initialize Terraform**:
+```bash
+cd terraform
+terraform init
+terraform plan
+terraform apply
+```
 
-2. **Connect to AKS**
-   ```bash
-   az aks get-credentials --resource-group <resource-group> --name <cluster-name>
-   ```
+2. **Configure kubectl**:
+```bash
+az aks get-credentials --resource-group <resource-group> --name <cluster-name>
+```
 
-3. **Install Istio**
-   ```bash
-   istioctl install --set profile=demo
-   ```
+3. **Install ArgoCD**:
+```bash
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
 
-4. **Install ArgoCD**
-   ```bash
-   kubectl create namespace argocd
-   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-   ```
+## Application Deployment
 
-5. **Deploy Application**
-   ```bash
-   kubectl apply -k k8s/overlays/prod
-   ```
+1. **Build and Test Application**:
+```bash
+go test ./...
+go build -v ./...
+```
 
-## Architecture
+2. **Configure GitHub Secrets**:
+Required secrets:
+- AZURE_CREDENTIALS
+- ACR_LOGIN_SERVER
+- ACR_USERNAME
+- ACR_PASSWORD
 
-The application follows a modern cloud-native architecture:
+3. **Deploy ArgoCD Applications**:
+```bash
+kubectl apply -f k8s/argocd/project.yaml
+kubectl apply -f k8s/argocd/root-app.yaml
+```
 
-- **Infrastructure Layer**: Managed through Terraform
-- **Container Orchestration**: Kubernetes (AKS)
-- **Service Mesh**: Istio for traffic management
-- **Continuous Deployment**: ArgoCD following GitOps principles
-- **Container Registry**: Azure Container Registry (ACR)
+## Environment Setup
 
-## Environment Management
-
-The application supports multiple environments through Kustomize overlays:
+The project supports three environments:
 - SIT (System Integration Testing)
 - UAT (User Acceptance Testing)
 - PROD (Production)
 
-Each environment has its own configuration in `k8s/overlays/`.
-
-## CI/CD Pipeline
-
-1. **CI Process (GitHub Actions)**
-   - Builds Go application
-   - Runs tests
-   - Builds Docker image
-   - Pushes to ACR
-
-2. **CD Process (ArgoCD)**
-   - Monitors Git repository for changes
-   - Automatically syncs Kubernetes manifests
-   - Supports progressive delivery through Istio
+Each environment is managed through Kustomize overlays.
 
 ## Traffic Management
 
-Istio provides advanced traffic management capabilities:
-- Canary deployments
-- A/B testing
-- Traffic splitting
-- Load balancing
+Istio configurations include:
+- Gateway for ingress traffic
+- VirtualService for traffic routing (90/10 split for canary)
+- DestinationRule for version management
 
-## Monitoring and Observability
+## Monitoring and Access
 
-The setup includes:
-- Prometheus for metrics
-- Grafana for visualization
-- Jaeger for distributed tracing
-- Kiali for service mesh visualization
+1. **Access ArgoCD UI**:
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+```
 
-## Security Considerations
+2. **Access Application**:
+```bash
+kubectl port-forward svc/hello-world -n <environment> 8080:80
+```
 
-- RBAC enabled on AKS cluster
-- Network policies implemented
-- Istio mTLS enabled
-- Secrets management through Azure Key Vault
+## Security Features
 
-## Running the Hello World Application
+- Non-root container execution
+- Network policies
+- Resource limits
+- RBAC configurations
+- Workload Identity
 
-You can run the application in three different ways:
+## CI/CD Pipeline
 
-1. **Run Locally Without Docker**
-   ```bash
-   # Run directly with Go
-   go run main.go
-   
-   # Test the application
-   curl http://localhost:8080
-   # Should output: Hello, World!
-   ```
+The GitHub Actions pipeline:
+1. Builds Go application
+2. Runs tests
+3. Builds Docker image
+4. Pushes to ACR
+5. Updates deployment manifests
+6. Triggers ArgoCD sync
 
-2. **Run with Docker**
-   ```bash
-   # Build the Docker image
-   docker build -t hello-app .
-   
-   # Run the container
-   docker run -p 8080:8080 hello-app
-   
-   # Test the application
-   curl http://localhost:8080
-   # Should output: Hello, World!
-   ```
+## Development Workflow
 
-3. **Run on Kubernetes (with ArgoCD)**
-   
-   First, make sure you have:
-   - Updated the repository URL in `k8s/argocd/application.yaml`
-   - Pushed your code to GitHub
-   - ArgoCD is installed and configured (see ArgoCD Setup section)
+1. Make code changes
+2. Push to GitHub
+3. CI pipeline builds and pushes new image
+4. Updates manifests with new image tag
+5. ArgoCD detects changes and syncs
+6. Istio manages traffic routing
 
-   Then apply the ArgoCD configuration:
-   ```bash
-   # Apply ArgoCD configurations
-   kubectl apply -f k8s/argocd/project.yaml
-   kubectl apply -f k8s/argocd/application.yaml
-   
-   # Wait for the application to be deployed
-   kubectl wait --for=condition=available deployment/hello-app -n devops --timeout=300s
-   
-   # Port forward to access the application
-   kubectl port-forward svc/hello-app -n devops 8080:8080
-   
-   # Test the application
-   curl http://localhost:8080
-   # Should output: Hello, World!
-   ```
+## Troubleshooting
 
-   You can also monitor the deployment in the ArgoCD UI:
-   1. Open http://localhost:8080 (after port-forwarding ArgoCD)
-   2. Log in to ArgoCD
-   3. You should see your application deployment status
+1. **Check Application Logs**:
+```bash
+kubectl logs -n <namespace> -l app=hello-world
+```
 
-## ArgoCD Setup and Configuration
+2. **Check ArgoCD Status**:
+```bash
+kubectl get applications -n argocd
+argocd app get devops-app
+```
 
-1. **Install ArgoCD**
-   ```bash
-   # Create ArgoCD namespace
-   kubectl create namespace argocd
-   
-   # Install ArgoCD
-   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-   
-   # Wait for ArgoCD pods to be ready
-   kubectl wait --for=condition=Ready pods --all -n argocd --timeout=300s
-   ```
-
-2. **Access ArgoCD UI**
-   ```bash
-   # Port forward to access ArgoCD UI
-   kubectl port-forward svc/argocd-server -n argocd 8080:443
-   
-   # Get the initial admin password
-   kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
-   ```
-   Then access ArgoCD UI at: http://localhost:8080
-   Default username: admin
-
-3. **Deploy Application Using ArgoCD**
-   
-   The repository includes ArgoCD configuration files in `k8s/argocd/`:
-   - `application.yaml`: Defines the application deployment configuration
-   - `project.yaml`: Defines project-level settings and permissions
-
-   Apply the configurations:
-   ```bash
-   # Apply the project configuration
-   kubectl apply -f k8s/argocd/project.yaml
-   
-   # Apply the application configuration
-   kubectl apply -f k8s/argocd/application.yaml
-   ```
-
-   Note: Make sure to update the repository URL in `application.yaml` to match your GitHub repository.
-
-4. **Verify Deployment**
-   ```bash
-   # Check ArgoCD application status
-   kubectl get applications -n argocd
-   
-   # Check deployed resources
-   kubectl get all -n devops
-   ```
+3. **Verify Istio**:
+```bash
+kubectl get virtualservices,destinationrules -n <namespace>
+```
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
+2. Create feature branch
+3. Commit changes
+4. Create pull request
 
 ## License
 
-MIT License# dev
+MIT License
+
+## Contact
+
+For questions or support, please open an issue in the repository.

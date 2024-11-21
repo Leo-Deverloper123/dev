@@ -6,11 +6,17 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -19,8 +25,8 @@ jobs:
 
     - name: Build and Test
       run: |
-        go test ./...
-        go build -v ./...
+        go test ./... || exit 1
+        go build -v ./... || exit 1
 
     - name: Login to Azure
       uses: azure/login@v1
@@ -34,6 +40,23 @@ jobs:
         username: ${{ secrets.ACR_USERNAME }}
         password: ${{ secrets.ACR_PASSWORD }}
     
-    - run: |
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/hello-world:${{ github.sha }} .
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/hello-world:${{ github.sha }}
+    - name: Build and Push Docker image with SHA tag
+      run: |
+        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/hello-world:${{ github.sha }} . || exit 1
+        docker push ${{ secrets.ACR_LOGIN_SERVER }}/hello-world:${{ github.sha }} || exit 1
+
+    - name: Update Kustomization
+      run: |
+        cd k8s/base || exit 1
+        if ! sed -i "s/newTag: .*/newTag: ${{ github.sha }}/" kustomization.yaml; then
+          echo "Failed to update kustomization.yaml"
+          exit 1
+        fi
+        
+    - name: Commit and Push Changes
+      run: |
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
+        git add k8s/base/kustomization.yaml
+        git commit -m "Update image tag to ${{ github.sha }}" || echo "No changes to commit"
+        git push || exit 1
