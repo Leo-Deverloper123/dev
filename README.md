@@ -123,6 +123,113 @@ The setup includes:
 - Istio mTLS enabled
 - Secrets management through Azure Key Vault
 
+## Running the Hello World Application
+
+You can run the application in three different ways:
+
+1. **Run Locally Without Docker**
+   ```bash
+   # Run directly with Go
+   go run main.go
+   
+   # Test the application
+   curl http://localhost:8080
+   # Should output: Hello, World!
+   ```
+
+2. **Run with Docker**
+   ```bash
+   # Build the Docker image
+   docker build -t hello-app .
+   
+   # Run the container
+   docker run -p 8080:8080 hello-app
+   
+   # Test the application
+   curl http://localhost:8080
+   # Should output: Hello, World!
+   ```
+
+3. **Run on Kubernetes (with ArgoCD)**
+   
+   First, make sure you have:
+   - Updated the repository URL in `k8s/argocd/application.yaml`
+   - Pushed your code to GitHub
+   - ArgoCD is installed and configured (see ArgoCD Setup section)
+
+   Then apply the ArgoCD configuration:
+   ```bash
+   # Apply ArgoCD configurations
+   kubectl apply -f k8s/argocd/project.yaml
+   kubectl apply -f k8s/argocd/application.yaml
+   
+   # Wait for the application to be deployed
+   kubectl wait --for=condition=available deployment/hello-app -n devops --timeout=300s
+   
+   # Port forward to access the application
+   kubectl port-forward svc/hello-app -n devops 8080:8080
+   
+   # Test the application
+   curl http://localhost:8080
+   # Should output: Hello, World!
+   ```
+
+   You can also monitor the deployment in the ArgoCD UI:
+   1. Open http://localhost:8080 (after port-forwarding ArgoCD)
+   2. Log in to ArgoCD
+   3. You should see your application deployment status
+
+## ArgoCD Setup and Configuration
+
+1. **Install ArgoCD**
+   ```bash
+   # Create ArgoCD namespace
+   kubectl create namespace argocd
+   
+   # Install ArgoCD
+   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+   
+   # Wait for ArgoCD pods to be ready
+   kubectl wait --for=condition=Ready pods --all -n argocd --timeout=300s
+   ```
+
+2. **Access ArgoCD UI**
+   ```bash
+   # Port forward to access ArgoCD UI
+   kubectl port-forward svc/argocd-server -n argocd 8080:443
+   
+   # Get the initial admin password
+   kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+   ```
+   Then access ArgoCD UI at: http://localhost:8080
+   Default username: admin
+
+3. **Deploy Application Using ArgoCD**
+   
+   The repository includes ArgoCD configuration files in `k8s/argocd/`:
+   - `application.yaml`: Defines the application deployment configuration
+   - `project.yaml`: Defines project-level settings and permissions
+
+   Apply the configurations:
+   ```bash
+   # Apply the project configuration
+   kubectl apply -f k8s/argocd/project.yaml
+   
+   # Apply the application configuration
+   kubectl apply -f k8s/argocd/application.yaml
+   ```
+
+   Note: Make sure to update the repository URL in `application.yaml` to match your GitHub repository.
+
+4. **Verify Deployment**
+   ```bash
+   # Check ArgoCD application status
+   kubectl get applications -n argocd
+   
+   # Check deployed resources
+   kubectl get all -n devops
+   ```
+
 ## Contributing
 
 1. Fork the repository
@@ -131,4 +238,4 @@ The setup includes:
 
 ## License
 
-MIT License
+MIT License# dev
